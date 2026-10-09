@@ -8,7 +8,7 @@
  *   FFMPEG_PATH=ffmpeg (yoksa "ffmpeg-static" paketi denenir)  ALLOW_PRIVATE=1 (yalnızca yerel testte; özel IP'lere bağlanmaya izin verir)
  */
 const http = require('http'), net = require('net'), crypto = require('crypto'), dns = require('dns').promises, { spawn } = require('child_process');
-const { openToken } = require('./token');
+const { inspectToken, openToken } = require('./token');
 
 const PORT = parseInt(process.env.PORT || '8090', 10);
 const SECRET = process.env.RELAY_SECRET || '';
@@ -254,13 +254,13 @@ const server = http.createServer((req, res) => {
 server.on('upgrade', (req, socket) => {
   const deny = (code, msg) => { try { socket.write('HTTP/1.1 ' + code + ' ' + msg + '\r\nConnection: close\r\n\r\n'); } catch (e) {} socket.destroy(); };
   const origin = req.headers.origin || '';
-  if (ORIGINS.length && !ORIGINS.includes(origin)) return deny(403, 'Forbidden');
+  if (ORIGINS.length && !ORIGINS.includes(origin)) { console.log('[RED] Origin izinli degil. Gelen: "' + origin + '"  Izinli: ' + JSON.stringify(ORIGINS)); return deny(403, 'Forbidden'); }
   if (conns >= MAX_CONN) return deny(503, 'Busy');
   const key = req.headers['sec-websocket-key'];
   if (!key || (req.headers.upgrade || '').toLowerCase() !== 'websocket') return deny(400, 'Bad Request');
   let token = ''; try { token = new URL(req.url, 'http://x').searchParams.get('token') || ''; } catch (e) {}
   const tok = openToken(token, SECRET);
-  if (!tok) return deny(401, 'Unauthorized');
+  if (!tok) { console.log('[RED] Token: ' + inspectToken(token, SECRET) + ' | anahtar uzunlugu(Render)=' + SECRET.length + ' | origin=' + origin); return deny(401, 'Unauthorized'); }
   if (tok.n) {
     const now = Date.now(); usedNonces.forEach((v, k) => { if (v < now) usedNonces.delete(k); });
     if (usedNonces.has(tok.n)) return deny(401, 'Unauthorized');
@@ -268,6 +268,7 @@ server.on('upgrade', (req, socket) => {
   }
   const accept = crypto.createHash('sha1').update(key + GUID).digest('base64');
   socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
+  console.log('[OK] WebSocket baglandi, origin=' + origin);
   socket.setNoDelay(true);
   conns++;
   const ws = new WS(socket);
@@ -279,6 +280,7 @@ server.on('upgrade', (req, socket) => {
 
 if (require.main === module) {
   if (!SECRET) { console.error('RELAY_SECRET gerekli.'); process.exit(1); }
+  console.log('[BASLADI] RELAY_SECRET uzunlugu=' + SECRET.length + '  ALLOWED_ORIGIN=' + JSON.stringify(ORIGINS));
   server.listen(PORT, () => log('Web DJ köprüsü dinliyor: ' + PORT + ' (ffmpeg: ' + FFMPEG + ')'));
 }
 module.exports = { server, isPrivateIp };
