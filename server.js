@@ -247,20 +247,26 @@ function session(ws, tok) {
 
 /* ---------- HTTP + yükseltme ---------- */
 let conns = 0;
+let lastEvent = null, upgradeCount = 0;
+function ev(msg) { lastEvent = { zaman: new Date().toISOString(), olay: msg }; console.log(msg); }
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
+  if (req.url && req.url.indexOf('/son') === 0) {   // tarayıcıdan: /son  -> son bağlantı denemesinin sonucu
+    return res.end(JSON.stringify({ ok: true, ws_deneme_sayisi: upgradeCount, son_olay: lastEvent, izinli_originler: ORIGINS, anahtar_uzunlugu: SECRET.length }));
+  }
   res.end(JSON.stringify({ ok: true, name: 'webdj-relay', live: !!live }));
 });
 server.on('upgrade', (req, socket) => {
+  upgradeCount++;
   const deny = (code, msg) => { try { socket.write('HTTP/1.1 ' + code + ' ' + msg + '\r\nConnection: close\r\n\r\n'); } catch (e) {} socket.destroy(); };
   const origin = req.headers.origin || '';
-  if (ORIGINS.length && !ORIGINS.includes(origin)) { console.log('[RED] Origin izinli degil. Gelen: "' + origin + '"  Izinli: ' + JSON.stringify(ORIGINS)); return deny(403, 'Forbidden'); }
+  if (ORIGINS.length && !ORIGINS.includes(origin)) { ev('[RED] Origin izinli degil. Gelen: "' + origin + '"  Izinli: ' + JSON.stringify(ORIGINS)); return deny(403, 'Forbidden'); }
   if (conns >= MAX_CONN) return deny(503, 'Busy');
   const key = req.headers['sec-websocket-key'];
   if (!key || (req.headers.upgrade || '').toLowerCase() !== 'websocket') return deny(400, 'Bad Request');
   let token = ''; try { token = new URL(req.url, 'http://x').searchParams.get('token') || ''; } catch (e) {}
   const tok = openToken(token, SECRET);
-  if (!tok) { console.log('[RED] Token: ' + inspectToken(token, SECRET) + ' | anahtar uzunlugu(Render)=' + SECRET.length + ' | origin=' + origin); return deny(401, 'Unauthorized'); }
+  if (!tok) { ev('[RED] Token: ' + inspectToken(token, SECRET) + ' | anahtar uzunlugu(Render)=' + SECRET.length + ' | origin=' + origin); return deny(401, 'Unauthorized'); }
   if (tok.n) {
     const now = Date.now(); usedNonces.forEach((v, k) => { if (v < now) usedNonces.delete(k); });
     if (usedNonces.has(tok.n)) return deny(401, 'Unauthorized');
@@ -268,7 +274,7 @@ server.on('upgrade', (req, socket) => {
   }
   const accept = crypto.createHash('sha1').update(key + GUID).digest('base64');
   socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
-  console.log('[OK] WebSocket baglandi, origin=' + origin);
+  ev('[OK] WebSocket baglandi, origin=' + origin);
   socket.setNoDelay(true);
   conns++;
   const ws = new WS(socket);
