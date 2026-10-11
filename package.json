@@ -1,0 +1,13 @@
+{
+  "name": "radyo58-webdj-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WebSocket-to-SHOUTcast v1 relay for Radyo58 Web DJ",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "ws": "^8.18.0"
+  }
+}

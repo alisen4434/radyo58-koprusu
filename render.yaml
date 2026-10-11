@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: radyo58-webdj-relay
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: ALLOWED_ORIGIN
+        value: https://radyo58.net
+      - key: RADIO_HOST
+        value: anadolu.liderhost.com.tr
+      - key: RADIO_SOURCE_PORT
+        value: "4580"
+      - key: STREAM_NAME
+        value: Radyo58 - Damardan Kalbe
+      - key: INPUT_SAMPLE_RATE
+        value: "44100"
+      - key: INPUT_CHANNELS
+        value: "1"
+      - key: MP3_BITRATE
+        value: "128k"
