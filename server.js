@@ -279,12 +279,37 @@ async function probeHandler(u, res) {
   } catch (e) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ hata: String(e.message || e) })); }
 }
 
+async function mountsHandler(u, res) {
+  const host = String(u.searchParams.get('host') || '').toLowerCase(), port = parseInt(u.searchParams.get('port'), 10);
+  if (!host || !(port > 0 && port < 65536) || !PROBE_HOSTS.some(h => host === h || host.endsWith('.' + h))) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ hata: 'host izinli değil ya da port geçersiz' })); }
+  try {
+    const addrs = await dns.lookup(host, { all: true, family: 4 });
+    if (!ALLOW_PRIVATE && addrs.some(a => isPrivateIp(a.address))) throw new Error('özel ağ adresi');
+    const ip = addrs[0].address, basic = Buffer.from('probe:probe').toString('base64');
+    const adaylar = ['/', '/live', '/stream', '/dj', '/autodj', '/radio', '/source', '/mount', '/dj1', '/live.mp3', '/stream.mp3', '/radyo58', '/radyo', '/Live', '/DJ', '/mp3', '/broadcast', '/dj.mp3', '/stream.mp3', '/radio.mp3', '/liquidsoap', '/harbor', '/main', '/s', '/1', '/;']
+      .concat(String(u.searchParams.get('m') || '').split(',').filter(x => x.startsWith('/')));
+    const liste = Array.from(new Set(adaylar)).slice(0, 40);
+    const sonuc = await Promise.all(liste.map(m => probeStep(ip, port, 'SOURCE ' + m + ' HTTP/1.0\r\nAuthorization: Basic ' + basic + '\r\nUser-Agent: probe\r\nContent-Type: audio/mpeg\r\n\r\n', 3500)));
+    const ozet = {};
+    liste.forEach((m, i) => {
+      const g = sonuc[i].gelen || '';
+      const ilk = (g.split(/\r?\n/)[0] || sonuc[i].sonuc).slice(0, 60);
+      const not = (g.match(/<p>([^<]{0,80})<\/p>/) || [])[1] || '';
+      ozet[m] = ilk + (not ? ' | ' + not : '');
+    });
+    const varOlan = liste.filter((m, i) => /^HTTP\/1\.\d (401|403|200)/.test(sonuc[i].gelen || ''));
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ host, ip, port, MOUNT_OLABILECEKLER: varOlan, ayrinti: ozet }, null, 1));
+  } catch (e) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ hata: String(e.message || e) })); }
+}
+
 /* ---------- HTTP + yükseltme ---------- */
 let conns = 0;
 let lastEvent = null, upgradeCount = 0;
 function ev(msg) { lastEvent = { zaman: new Date().toISOString(), olay: msg }; console.log(msg); }
 const server = http.createServer((req, res) => {
   if (req.url && req.url.indexOf('/probe') === 0) return probeHandler(new URL(req.url, 'http://x'), res);
+  if (req.url && req.url.indexOf('/mounts') === 0) return mountsHandler(new URL(req.url, 'http://x'), res);
   res.writeHead(200, { 'Content-Type': 'application/json' });
   if (req.url && req.url.indexOf('/son') === 0) {   // tarayıcıdan: /son  -> son bağlantı denemesinin sonucu
     return res.end(JSON.stringify({ ok: true, ws_deneme_sayisi: upgradeCount, son_olay: lastEvent, izinli_originler: ORIGINS, anahtar_uzunlugu: SECRET.length, anahtar_izi: require('crypto').createHash('sha256').update(SECRET, 'utf8').digest('hex').slice(0, 8) }));
