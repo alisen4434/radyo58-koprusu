@@ -21,6 +21,13 @@ TEST ADRESLERI (tarayicida)
   https://SERVIS-ADINIZ.onrender.com/probe?host=anadolu.liderhost.com.tr&port=4580
                                              -> radyo portu hangi protokolu konusuyor (yaklasik 15 sn)
 
+SONIC PANEL DJ KAPISI (Liquidsoap, Icecast usulu) - Render'a EK degiskenler (istege bagli ama onerilir)
+  ICECAST_PORT  = 4580
+  ICECAST_MOUNT = /
+  ICECAST_USER  = Sonic Panel'deki DJ kullanici adi
+  (Bunlar site formundaki port/mount/kullanici alanlarini gecersiz kilar. Site tarafinda sunucu turu Icecast,
+   sifre alani yalnizca DJ sifresi olmali.)
+
 NOTLAR
 - Ucretsiz planda servis kullanilmazsa uykuya gecer; yayindan once ana adresi acip uyandirin.
 - Sonic Panel DJ portu icin AutoDJ ACIK olmali.

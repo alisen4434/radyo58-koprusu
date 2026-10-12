@@ -188,6 +188,13 @@ function session(ws, tok) {
 
   async function start(o) {
     started = true; opts = o;
+    if (t.protocol === 'icecast') {   // Sonic Panel DJ kapısı (Liquidsoap harbor): kaynak portu varsa onu kullan; Render ortam değişkenleri her şeyin üstündedir
+      if (parseInt(process.env.ICECAST_PORT, 10)) t.port = parseInt(process.env.ICECAST_PORT, 10);
+      else if (parseInt(t.source_port, 10)) t.port = parseInt(t.source_port, 10);
+      if (process.env.ICECAST_MOUNT) t.mount = process.env.ICECAST_MOUNT;
+      if (process.env.ICECAST_USER) t.user = process.env.ICECAST_USER;
+      log('icecast hedef: port=' + t.port + ' mount=' + (t.mount || '/live') + ' kullanici=' + (t.user || 'source'));
+    }
     const bitrate = [32, 48, 64, 96, 128, 160, 192, 256, 320].includes(+o.bitrate) ? +o.bitrate : 128;
     opts.bitrate = bitrate;
     try { ip = await resolveTarget(t); } catch (e) { error(e.message, true); return ws.close(1008, 'target'); }
@@ -218,7 +225,8 @@ function session(ws, tok) {
     ff.stdin.on('error', () => {});
     pending.forEach(b => { if (ff && ff.stdin.writable) ff.stdin.write(b); }); pending = [];
     let ffErr = '';
-    ff.stderr.on('data', d => { const m = clean(d.toString(), 160); if (m) { ffErr = m; log('ffmpeg:', m); } });
+    const maskCreds = x => String(x).replace(/(:\/\/[^:@\/\s]+):[^@\s]+@/g, '$1:***@');
+    ff.stderr.on('data', d => { const m = maskCreds(clean(d.toString(), 200)); if (m) { ffErr = m; log('ffmpeg:', m); } });
     ff.on('exit', c => { if (!closed) { ev('[FFMPEG] kod ' + c + ' | ' + (ffErr || 'ek bilgi yok') + ' | protokol=' + t.protocol + ' mount=' + (t.mount || '') + ' port=' + t.port); error('Ses dönüştürücü (ffmpeg) durdu, kod ' + c + (ffErr ? ' — ' + ffErr : '') + '.', true); ws.close(1011, 'ffmpeg'); } });
     if (t.protocol === 'icecast') { stage = 'live'; status('live', { server: t.host + ':' + t.port }); }
     else {
