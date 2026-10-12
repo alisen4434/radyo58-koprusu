@@ -1,4 +1,0 @@
-{ "name": "radyo-webdj-relay", "version": "2.0.0", "private": true, "main": "server.js",
-  "engines": { "node": ">=18" },
-  "scripts": { "start": "node server.js" },
-  "optionalDependencies": { "ffmpeg-static": "^5.2.0" } }
