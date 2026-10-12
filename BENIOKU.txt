@@ -1,0 +1,27 @@
+RADYO58 WEB DJ KOPRUSU - TAM PAKET (Render + GitHub)
+
+DOSYALAR (hepsi depoda, ayni klasorde olmali):
+  Dockerfile, render.yaml, package.json, server.js, token.js, .dockerignore, BENIOKU.txt
+  (Ayni adli eski dosyalarin uzerine yazin. Dosya adlarina (1) gibi ek gelmesin.)
+
+KURULUM
+1) GitHub'da depoyu acin (ornek: radyo58-koprusu). Add file > Upload files ile bu klasordeki
+   tum dosyalari yukleyin ve en altta "Commit changes" deyin.
+2) Render > Web Service > depoyu secin. Runtime: Docker. Plan: Free.
+3) Environment bolumune iki degisken:
+     RELAY_SECRET   = sitedeki Yonetim > Yayin ve Sunucu > "Kopru ortak anahtari" ile BIREBIR AYNI
+                      (kopyala-yapistir yerine ayni degeri iki yerde de elle yazmak bosluk hatasini onler)
+     ALLOWED_ORIGIN = https://radyo58.net
+4) Deploy bitip "Live" olunca adres: https://SERVIS-ADINIZ.onrender.com
+   Sitede "Kopru WebSocket adresi" alanina: wss://SERVIS-ADINIZ.onrender.com
+
+TEST ADRESLERI (tarayicida)
+  https://SERVIS-ADINIZ.onrender.com/        -> {"ok":true,"name":"webdj-relay","live":false}  (calisiyor)
+  https://SERVIS-ADINIZ.onrender.com/son     -> son baglanti denemesinin sonucu ([OK] / [RED] ve nedeni)
+  https://SERVIS-ADINIZ.onrender.com/probe?host=anadolu.liderhost.com.tr&port=4580
+                                             -> radyo portu hangi protokolu konusuyor (yaklasik 15 sn)
+
+NOTLAR
+- Ucretsiz planda servis kullanilmazsa uykuya gecer; yayindan once ana adresi acip uyandirin.
+- Sonic Panel DJ portu icin AutoDJ ACIK olmali.
+- Anahtari paylastiysaniz yenisini uretip hem siteye hem Render'a yazin.
