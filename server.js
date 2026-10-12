@@ -216,11 +216,8 @@ function session(ws, tok) {
     live = handle; t0 = Date.now();
     const args = ['-hide_banner', '-loglevel', 'error', '-probesize', '65536', '-analyzeduration', '500000', '-i', 'pipe:0', '-vn', '-map', '0:a:0',
       '-c:a', 'libmp3lame', '-b:a', bitrate + 'k', '-ar', '44100', '-ac', o.stereo === false ? '1' : '2', '-write_xing', '0'];
-    if (t.protocol === 'icecast') {
-      const url = 'icecast://' + encodeURIComponent(t.user || 'source') + ':' + encodeURIComponent(t.password) + '@' + ip + ':' + parseInt(t.port, 10) + (t.mount || '/live');
-      args.push('-content_type', 'audio/mpeg', '-f', 'mp3', url);
-    } else args.push('-f', 'mp3', 'pipe:1');
-    ff = spawn(FFMPEG, args, { stdio: ['pipe', t.protocol === 'icecast' ? 'ignore' : 'pipe', 'pipe'] });
+    args.push('-f', 'mp3', 'pipe:1');
+    ff = spawn(FFMPEG, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     ff.on('error', e => { error('ffmpeg başlatılamadı: ' + e.message, true); ws.close(1011, 'ffmpeg'); });
     ff.stdin.on('error', () => {});
     pending.forEach(b => { if (ff && ff.stdin.writable) ff.stdin.write(b); }); pending = [];
@@ -228,7 +225,25 @@ function session(ws, tok) {
     const maskCreds = x => String(x).replace(/(:\/\/[^:@\/\s]+):[^@\s]+@/g, '$1:***@');
     ff.stderr.on('data', d => { const m = maskCreds(clean(d.toString(), 200)); if (m) { ffErr = m; log('ffmpeg:', m); } });
     ff.on('exit', c => { if (!closed) { ev('[FFMPEG] kod ' + c + ' | ' + (ffErr || 'ek bilgi yok') + ' | protokol=' + t.protocol + ' mount=' + (t.mount || '') + ' port=' + t.port); error('Ses dönüştürücü (ffmpeg) durdu, kod ' + c + (ffErr ? ' — ' + ffErr : '') + '.', true); ws.close(1011, 'ffmpeg'); } });
-    if (t.protocol === 'icecast') { stage = 'live'; status('live', { server: t.host + ':' + t.port }); }
+    if (t.protocol === 'icecast') {
+      // ffmpeg'in icecast:// protokolu mount '/' ya da bos olunca hata veriyor; SOURCE istegini kendimiz gonderiyoruz
+      const mount = (t.mount && String(t.mount).trim()) || '/live';
+      const auth = Buffer.from((t.user || 'source') + ':' + t.password).toString('base64');
+      let ready = false, rbuf = '';
+      sock = net.connect({ host: ip, port: parseInt(t.port, 10) });
+      sock.setNoDelay(true);
+      sock.on('connect', () => sock.write('SOURCE ' + (mount.startsWith('/') ? mount : '/' + mount) + ' HTTP/1.0\r\nAuthorization: Basic ' + auth + '\r\nUser-Agent: webdj-relay\r\nContent-Type: audio/mpeg\r\nice-name: ' + (t.dj || 'WebDJ') + '\r\nice-public: 0\r\n\r\n'));
+      sock.on('data', d => {
+        if (ready) return;
+        rbuf += d.toString('latin1');
+        if (rbuf.indexOf('\n') < 0 && rbuf.length < 300) return;
+        if (/^(HTTP\/1\.[01]|ICY) 200/i.test(rbuf)) { ready = true; stage = 'live'; status('live', { server: t.host + ':' + t.port + mount }); }
+        else { error('Sunucu kaynagi reddetti: ' + clean(rbuf.split('\n')[0], 120) + ' (mount: ' + mount + ')', true); ws.close(1011, 'dest'); }
+      });
+      sock.on('error', e => { if (!closed) { error('Sunucu baglanti hatasi: ' + e.message, true); ws.close(1011, 'dest'); } });
+      sock.on('close', () => { if (!closed) { error('Sunucu baglantiyi kapatti (mount/sifre/kullanici adini kontrol edin).', true); ws.close(1011, 'dest'); } });
+      ff.stdout.on('data', d => { if (ready && sock && !sock.destroyed && sock.writableLength < (1 << 20)) { sock.write(d); bytesOut += d.length; } });
+    }
     else {
       ff.stdout.on('data', d => { if (stage === 'live' && sock && !sock.destroyed && sock.writableLength < (1 << 20)) { sock.write(d); bytesOut += d.length; } });
       connectDest();
